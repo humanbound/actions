@@ -6,6 +6,8 @@ Users pin the moving major tag (`v1`) or an exact release (`v1.0.0`).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-17
+
 ### Added
 
 - Initial release of the Humanbound GitHub Action.
