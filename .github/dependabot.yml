@@ -1,0 +1,8 @@
+version: 2
+updates:
+  # Keep the actions used in our own workflows (and inside action.yml) current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [dependencies]

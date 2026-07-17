@@ -1,0 +1,322 @@
+name: "Humanbound — AI Agent Security Testing"
+description: "Adversarial security testing for AI agents in CI: OWASP agentic attacks, prompt injection, behavioral checks."
+author: "Humanbound"
+
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  # --- Mode selection ---
+  # Local mode  = provider-api-key set (engine runs in the runner, your LLM key).
+  # Platform mode = api-key set (engine runs on humanbound.ai, results in dashboard).
+  # Exactly one credential must be provided; the action auto-detects the mode.
+  provider-api-key:
+    description: "LOCAL MODE. API key for the attacker/judge LLM provider (maps to HB_API_KEY). Use a repository secret."
+    required: false
+    default: ""
+  api-key:
+    description: "PLATFORM MODE. Humanbound project API key (maps to HUMANBOUND_API_KEY). Use a repository secret."
+    required: false
+    default: ""
+
+  # --- Agent under test ---
+  endpoint:
+    description: >-
+      Agent integration config — path to a JSON file (relative to the workspace) or an inline JSON string.
+      Required in local mode. Optional in platform mode (defaults to the project's stored integration).
+      Shape: {"streaming": null, "chat_completion": {"endpoint": "...", "headers": {}, "payload": {"content": "$PROMPT"}}}
+    required: false
+    default: ""
+
+  # --- Local-mode attacker/judge LLM (ignored in platform mode) ---
+  provider:
+    description: "LOCAL MODE. LLM provider used as attacker/judge (e.g. openai, anthropic, ollama). Maps to HB_PROVIDER."
+    required: false
+    default: "openai"
+  model:
+    description: "LOCAL MODE. Model override for the attacker/judge LLM (e.g. llama3.1:8b). Maps to HB_MODEL."
+    required: false
+    default: ""
+  provider-endpoint:
+    description: "LOCAL MODE. Custom provider endpoint (e.g. a self-hosted ollama URL). Maps to HB_ENDPOINT."
+    required: false
+    default: ""
+
+  # --- Test selection (both modes) ---
+  level:
+    description: "Test depth: quick | unit (~20 min) | system (~45 min) | acceptance (~90 min). Note: quick is currently an alias for unit in the CLI; a true short scan is planned upstream."
+    required: false
+    default: "quick"
+  category:
+    description: "Test category (e.g. humanbound/adversarial/owasp_agentic, humanbound/adversarial/owasp_single_turn, humanbound/behavioral/qa). Empty = CLI default."
+    required: false
+    default: ""
+  fail-on:
+    description: "Fail the job when findings of this severity (or higher) exist: critical | high | medium | low | any. Empty string = report-only."
+    required: false
+    default: "high"
+  scope:
+    description: "Path to a scope file (YAML/JSON with permitted/restricted intents) so the judge knows what the agent is supposed to do."
+    required: false
+    default: ""
+  system-prompt:
+    description: "Path to the agent's system prompt file, used for scope extraction (alternative to `scope`)."
+    required: false
+    default: ""
+  repo:
+    description: "Repository path to scan for scope discovery (system prompts, tool definitions). In CI, '.' scans the checked-out workspace. Alternative to `scope`."
+    required: false
+    default: ""
+  context:
+    description: "Extra context for the judge (string or path to a .txt file), e.g. 'Authenticated as Alice, her PII is expected'."
+    required: false
+    default: ""
+
+  # --- Plumbing ---
+  version:
+    description: "Humanbound CLI version to install (e.g. 2.6.0). Empty = latest."
+    required: false
+    default: ""
+  results-file:
+    description: "Path where the JSON results export is written."
+    required: false
+    default: "humanbound-results.json"
+  sarif-file:
+    description: "Path where SARIF is written for GitHub code scanning. Empty string disables SARIF generation."
+    required: false
+    default: "humanbound.sarif"
+
+outputs:
+  mode:
+    description: "The mode that ran: 'local' or 'platform'."
+    value: ${{ steps.detect.outputs.mode }}
+  results-file:
+    description: "Path to the exported JSON results (upload with actions/upload-artifact)."
+    value: ${{ steps.export.outputs.results-file }}
+  sarif-file:
+    description: "Path to the SARIF file (upload with github/codeql-action/upload-sarif). Empty if disabled."
+    value: ${{ steps.sarif.outputs.sarif-file }}
+
+runs:
+  using: composite
+  steps:
+    # 1. Decide the mode from which credential is present, and validate inputs.
+    - name: Detect mode
+      id: detect
+      shell: bash
+      env:
+        PROVIDER_API_KEY: ${{ inputs.provider-api-key }}
+        API_KEY: ${{ inputs.api-key }}
+        INPUT_ENDPOINT: ${{ inputs.endpoint }}
+        INPUT_LEVEL: ${{ inputs.level }}
+        INPUT_SCOPE: ${{ inputs.scope }}
+        INPUT_SYSTEM_PROMPT: ${{ inputs.system-prompt }}
+        INPUT_REPO: ${{ inputs.repo }}
+      run: |
+        has_provider=$([ -n "$PROVIDER_API_KEY" ] && echo 1 || echo 0)
+        has_api=$([ -n "$API_KEY" ] && echo 1 || echo 0)
+
+        if [ "$has_provider" = 1 ] && [ "$has_api" = 1 ]; then
+          echo "::error::Both provider-api-key (local) and api-key (platform) are set. Provide exactly one."
+          exit 1
+        elif [ "$has_api" = 1 ]; then
+          mode=platform
+        elif [ "$has_provider" = 1 ]; then
+          mode=local
+        else
+          echo "::error::No credentials set. Provide provider-api-key (local mode) or api-key (platform mode)."
+          exit 1
+        fi
+
+        # Per-mode input validation
+        if [ "$mode" = local ] && [ -z "$INPUT_ENDPOINT" ]; then
+          echo "::error::Local mode requires 'endpoint' (path to your agent integration JSON)."
+          exit 1
+        fi
+
+        # Scope inputs only feed the local engine; platform scope comes from
+        # `hb connect` when the project is created.
+        if [ "$mode" = platform ]; then
+          for pair in "scope=$INPUT_SCOPE" "system-prompt=$INPUT_SYSTEM_PROMPT" "repo=$INPUT_REPO"; do
+            name="${pair%%=*}"; value="${pair#*=}"
+            if [ -n "$value" ]; then
+              echo "::warning::'$name' is ignored in platform mode — scope is defined on the project (hb connect)."
+            fi
+          done
+        fi
+
+        case "$INPUT_LEVEL" in
+          quick|unit|system|acceptance) ;;
+          *) echo "::error::Invalid level '$INPUT_LEVEL' (expected quick|unit|system|acceptance)"; exit 1 ;;
+        esac
+
+        echo "mode=$mode" >> "$GITHUB_OUTPUT"
+        echo "Detected mode: $mode"
+
+    # 2. Install the CLI. Local needs the [engine] extra; platform needs only base.
+    - name: Install Humanbound CLI
+      shell: bash
+      env:
+        MODE: ${{ steps.detect.outputs.mode }}
+        INPUT_VERSION: ${{ inputs.version }}
+      run: |
+        if [ "$MODE" = local ]; then
+          pkg="humanbound[engine]"
+        else
+          pkg="humanbound"
+        fi
+        if [ -n "$INPUT_VERSION" ]; then
+          python -m pip install --quiet "${pkg}==$INPUT_VERSION"
+        else
+          python -m pip install --quiet "$pkg"
+        fi
+        hb --version
+
+    # 3. Platform readiness gate: headless API-key auth ships in a future CLI.
+    #    Until MIN_PLATFORM_VERSION is real, platform mode exits with a clear message.
+    - name: Check platform readiness
+      if: steps.detect.outputs.mode == 'platform'
+      shell: bash
+      run: |
+        # TODO: set to the humanbound release that adds HUMANBOUND_API_KEY headless auth.
+        MIN_PLATFORM_VERSION=""
+        if [ -z "$MIN_PLATFORM_VERSION" ]; then
+          echo "::error::Platform mode (api-key) is not available yet — headless project-key auth is coming soon. Use provider-api-key (local mode) meanwhile. See https://github.com/humanbound/hb-test#platform-mode"
+          exit 1
+        fi
+        installed=$(hb --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+        if [ -z "$installed" ]; then
+          echo "::error::Could not determine the installed humanbound version."
+          exit 1
+        fi
+        if [ "$(printf '%s\n%s\n' "$MIN_PLATFORM_VERSION" "$installed" | sort -V | head -1)" != "$MIN_PLATFORM_VERSION" ]; then
+          echo "::error::Platform mode requires humanbound >= $MIN_PLATFORM_VERSION (installed: $installed). Pin 'version' or remove it to get latest."
+          exit 1
+        fi
+
+    # 4. Run the tests.
+    - name: Run security tests
+      id: test
+      shell: bash
+      env:
+        MODE: ${{ steps.detect.outputs.mode }}
+        # Local-mode attacker/judge LLM
+        HB_PROVIDER: ${{ inputs.provider }}
+        HB_API_KEY: ${{ inputs.provider-api-key }}
+        HB_MODEL: ${{ inputs.model }}
+        HB_ENDPOINT: ${{ inputs.provider-endpoint }}
+        # Platform-mode auth
+        HUMANBOUND_API_KEY: ${{ inputs.api-key }}
+        # Shared inputs
+        INPUT_ENDPOINT: ${{ inputs.endpoint }}
+        INPUT_LEVEL: ${{ inputs.level }}
+        INPUT_CATEGORY: ${{ inputs.category }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_SCOPE: ${{ inputs.scope }}
+        INPUT_SYSTEM_PROMPT: ${{ inputs.system-prompt }}
+        INPUT_REPO: ${{ inputs.repo }}
+        INPUT_CONTEXT: ${{ inputs.context }}
+      run: |
+        # Empty-but-set env vars defeat the CLI's getenv defaults (e.g. ollama's
+        # HB_MODEL fallback), so drop any that are blank.
+        if [ -z "$HB_MODEL" ]; then unset HB_MODEL; fi
+        if [ -z "$HB_ENDPOINT" ]; then unset HB_ENDPOINT; fi
+        if [ -z "$HB_API_KEY" ]; then unset HB_API_KEY; fi
+        if [ -z "$HUMANBOUND_API_KEY" ]; then unset HUMANBOUND_API_KEY; fi
+
+        ARGS=(test --wait)
+
+        # Local mode forces the in-process engine; platform mode omits --local.
+        [ "$MODE" = local ] && ARGS+=(--local)
+
+        # endpoint: required in local, optional override in platform
+        [ -n "$INPUT_ENDPOINT" ] && ARGS+=(--endpoint "$INPUT_ENDPOINT")
+
+        case "$INPUT_LEVEL" in
+          quick) ARGS+=(--quick) ;;
+          unit|system|acceptance) ARGS+=(--testing-level "$INPUT_LEVEL") ;;
+        esac
+
+        [ -n "$INPUT_CATEGORY" ]      && ARGS+=(--test-category "$INPUT_CATEGORY")
+        [ -n "$INPUT_FAIL_ON" ]       && ARGS+=(--fail-on "$INPUT_FAIL_ON")
+        [ -n "$INPUT_CONTEXT" ]       && ARGS+=(--context "$INPUT_CONTEXT")
+
+        # Scope inputs only feed the local engine (platform scope comes from
+        # hb connect) — the detect step already warned; don't forward them.
+        if [ "$MODE" = local ]; then
+          [ -n "$INPUT_SCOPE" ]         && ARGS+=(--scope "$INPUT_SCOPE")
+          [ -n "$INPUT_SYSTEM_PROMPT" ] && ARGS+=(--prompt "$INPUT_SYSTEM_PROMPT")
+          [ -n "$INPUT_REPO" ]          && ARGS+=(--repo "$INPUT_REPO")
+        fi
+
+        hb "${ARGS[@]}"
+
+    # 5. Export results (both modes), even on failure.
+    - name: Export results
+      id: export
+      if: always()
+      shell: bash
+      env:
+        INPUT_RESULTS_FILE: ${{ inputs.results-file }}
+        # Platform mode: hb logs must authenticate here too, or it silently
+        # falls back to the (empty) local results reader.
+        HUMANBOUND_API_KEY: ${{ inputs.api-key }}
+      run: |
+        if [ -z "$HUMANBOUND_API_KEY" ]; then unset HUMANBOUND_API_KEY; fi
+        # --size: hb logs paginates JSON exports too (default 50); a deep scan
+        # produces more entries than that, so ask for everything in one page.
+        hb logs --format json -o "$INPUT_RESULTS_FILE" --size 100000 || true
+        if [ -f "$INPUT_RESULTS_FILE" ]; then
+          echo "results-file=$INPUT_RESULTS_FILE" >> "$GITHUB_OUTPUT"
+        fi
+
+    # 6. Generate SARIF for GitHub code scanning (unless disabled).
+    - name: Generate SARIF
+      id: sarif
+      if: always()
+      shell: bash
+      env:
+        INPUT_RESULTS_FILE: ${{ inputs.results-file }}
+        INPUT_SARIF_FILE: ${{ inputs.sarif-file }}
+        INPUT_ENDPOINT: ${{ inputs.endpoint }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        if [ -z "$INPUT_SARIF_FILE" ] || [ ! -f "$INPUT_RESULTS_FILE" ]; then
+          exit 0
+        fi
+        # Anchor: findings have no source location, so attach every alert to one
+        # repo file — the agent config if present, else the running workflow file.
+        if [ -n "$INPUT_ENDPOINT" ] && [ -f "$INPUT_ENDPOINT" ]; then
+          ANCHOR="$INPUT_ENDPOINT"
+        elif [ -n "${GITHUB_WORKFLOW_REF:-}" ]; then
+          ANCHOR="$(echo "$GITHUB_WORKFLOW_REF" | sed -E 's#^[^/]+/[^/]+/##; s/@.*$//')"
+        else
+          ANCHOR="$INPUT_RESULTS_FILE"
+        fi
+        # Normalize to a clean repo-relative URI: SARIF forbids '.' segments and
+        # absolute paths break GitHub's file association.
+        if [ -n "${GITHUB_WORKSPACE:-}" ]; then
+          ANCHOR="$(realpath --relative-to="$GITHUB_WORKSPACE" "$ANCHOR" 2>/dev/null || echo "$ANCHOR")"
+        fi
+        ANCHOR="${ANCHOR#./}"
+        # '|| true': grep finding no x.y.z must not abort the step under pipefail.
+        CLI_VERSION="$(hb --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+        python "$ACTION_PATH/scripts/to_sarif.py" "$INPUT_RESULTS_FILE" \
+          --sarif "$INPUT_SARIF_FILE" --anchor "$ANCHOR" --cli-version "${CLI_VERSION:-unknown}"
+        echo "sarif-file=$INPUT_SARIF_FILE" >> "$GITHUB_OUTPUT"
+
+    # 7. Severity summary on the run page (same tested parser as the SARIF step).
+    - name: Write job summary
+      if: always()
+      shell: bash
+      env:
+        INPUT_RESULTS_FILE: ${{ inputs.results-file }}
+        MODE: ${{ steps.detect.outputs.mode }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        if [ ! -f "$INPUT_RESULTS_FILE" ] || [ -z "${GITHUB_STEP_SUMMARY:-}" ]; then
+          exit 0
+        fi
+        python "$ACTION_PATH/scripts/to_sarif.py" "$INPUT_RESULTS_FILE" \
+          --summary-append "$GITHUB_STEP_SUMMARY" --mode "${MODE:-}" || true

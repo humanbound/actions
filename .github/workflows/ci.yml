@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Validate action.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: YAML syntax + required fields
+        run: |
+          python - <<'PY'
+          import yaml, sys
+
+          with open("action.yml") as f:
+              action = yaml.safe_load(f)
+
+          for field in ("name", "description", "runs", "inputs"):
+              assert field in action, f"missing top-level field: {field}"
+          assert action["runs"]["using"] == "composite"
+          assert len(action["description"]) <= 125, "Marketplace caps description at 125 chars"
+          print("action.yml OK")
+          PY
+
+  sarif:
+    name: SARIF transform tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run unit tests
+        run: python3 -m unittest discover -s test -v
+
+  smoke:
+    name: CLI installs and runs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install and verify
+        run: |
+          python -m pip install --quiet "humanbound[engine]"
+          hb --version
+          hb test --help > /dev/null
+
+  # Real adversarial run against the mock agent. Needs an LLM key, so it only
+  # runs on pushes to main in the canonical repo (never on fork PRs).
+  e2e:
+    name: End-to-end (quick scan vs mock agent)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check secret availability
+        id: secrets
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::OPENAI_API_KEY secret not set — skipping e2e"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Start mock agent
+        if: steps.secrets.outputs.available == 'true'
+        run: |
+          python test/mock-agent.py &
+          sleep 1
+          curl -sf -X POST http://127.0.0.1:8765/chat -d '{"content":"ping"}' > /dev/null
+
+      - name: Run the action against the mock agent
+        if: steps.secrets.outputs.available == 'true'
+        id: hb
+        uses: ./
+        with:
+          endpoint: test/bot-config.json
+          provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+          level: quick
+          fail-on: ""   # report-only: e2e verifies plumbing, not the mock's security
+
+      - name: Upload results artifact
+        # the empty-string check matters: upload-artifact hard-fails on an
+        # empty path input when the action failed before exporting results
+        if: always() && steps.secrets.outputs.available == 'true' && steps.hb.outputs.results-file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: ${{ steps.hb.outputs.results-file }}
+          if-no-files-found: warn

@@ -1,0 +1,50 @@
+name: Bug report
+description: Something in the action misbehaves
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Security vulnerabilities must **not** be filed here — see [SECURITY.md](../../SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did the action do instead?
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow snippet
+      description: "The `uses: humanbound/hb-test@...` step with its inputs (redact secrets)."
+      render: yaml
+    validations:
+      required: true
+  - type: input
+    id: action-version
+    attributes:
+      label: Action version
+      placeholder: "v1 / v1.0.0 / commit SHA"
+    validations:
+      required: true
+  - type: input
+    id: cli-version
+    attributes:
+      label: Humanbound CLI version
+      description: Printed by the "Install Humanbound CLI" step (`hb --version`).
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - local (provider-api-key)
+        - platform (api-key)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Failing step output (redact secrets and internal URLs).
+      render: shell
