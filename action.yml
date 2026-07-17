@@ -35,7 +35,7 @@ inputs:
     required: false
     default: "openai"
   model:
-    description: "LOCAL MODE. Model override for the attacker/judge LLM (e.g. llama3.1:8b). Maps to HB_MODEL."
+    description: "LOCAL MODE. Attacker/judge model (e.g. gpt-4.1, llama3.1:8b). Required for every provider except ollama — the current CLI has no provider default. Maps to HB_MODEL."
     required: false
     default: ""
   provider-endpoint:
@@ -110,6 +110,8 @@ runs:
         API_KEY: ${{ inputs.api-key }}
         INPUT_ENDPOINT: ${{ inputs.endpoint }}
         INPUT_LEVEL: ${{ inputs.level }}
+        INPUT_PROVIDER: ${{ inputs.provider }}
+        INPUT_MODEL: ${{ inputs.model }}
         INPUT_SCOPE: ${{ inputs.scope }}
         INPUT_SYSTEM_PROMPT: ${{ inputs.system-prompt }}
         INPUT_REPO: ${{ inputs.repo }}
@@ -132,6 +134,14 @@ runs:
         # Per-mode input validation
         if [ "$mode" = local ] && [ -z "$INPUT_ENDPOINT" ]; then
           echo "::error::Local mode requires 'endpoint' (path to your agent integration JSON)."
+          exit 1
+        fi
+
+        # The current CLI has no provider-default model (KeyError 'model' deep in
+        # the run) for every provider except ollama. Fail fast with a clear message;
+        # relax this once a CLI release ships provider defaults.
+        if [ "$mode" = local ] && [ "$INPUT_PROVIDER" != "ollama" ] && [ -z "$INPUT_MODEL" ]; then
+          echo "::error::Local mode with provider '$INPUT_PROVIDER' requires an explicit 'model' (e.g. model: gpt-4.1) — the current Humanbound CLI has no provider default."
           exit 1
         fi
 

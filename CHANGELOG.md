@@ -6,6 +6,15 @@ Users pin the moving major tag (`v1`) or an exact release (`v1.0.0`).
 
 ## [Unreleased]
 
+### Changed
+
+- Local mode now **requires an explicit `model`** for every provider except
+  ollama, enforced with a clear error in the detect step — the current CLI
+  crashes with `KeyError: 'model'` when none is set (its docs call the model
+  optional, but no provider default is implemented). All README examples now
+  include `model: gpt-4.1`. The check will be relaxed once a CLI release ships
+  provider defaults.
+
 ## [1.0.0] - 2026-07-17
 
 ### Added

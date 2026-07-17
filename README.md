@@ -80,8 +80,9 @@ The action auto-detects the mode from which credential you provide:
     # Default: openai
     provider: ''
 
-    # LOCAL MODE. Model override for the attacker/judge LLM
-    # (e.g. llama3.1:8b for ollama).
+    # LOCAL MODE. Attacker/judge model (e.g. gpt-4.1, llama3.1:8b).
+    # Required for every provider except ollama — the current CLI has no
+    # provider default.
     model: ''
 
     # LOCAL MODE. Custom provider endpoint (e.g. a self-hosted ollama URL).
@@ -191,6 +192,7 @@ jobs:
         with:
           endpoint: ./bot-config.json
           provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-4.1
           level: quick
           fail-on: high
 ```
@@ -212,6 +214,7 @@ If your agent needs auth, don't commit a `bot-config.json` containing the token 
       "headers": {"Authorization": "Bearer ${{ secrets.AGENT_TOKEN }}"},
       "payload": {"content": "$PROMPT"}}}
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+    model: gpt-4.1
 ```
 
 **Or render the file in a step** — easier to read once headers grow (`jq` is preinstalled on runners, and passing secrets via `env:` keeps them out of the script text):
@@ -231,6 +234,7 @@ If your agent needs auth, don't commit a `bot-config.json` containing the token 
   with:
     endpoint: ./bot-config.json
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+    model: gpt-4.1
 ```
 
 GitHub automatically masks secret values if they ever appear in logs, and the action never prints the config contents. The scope file rarely needs this treatment — permitted/restricted intents usually aren't secret, and versioning them with the agent is a feature — but the same render-a-file pattern works for `scope:` too, or skip the file entirely with `repo: .` / `system-prompt:` extraction.
@@ -245,6 +249,7 @@ Without scope, the judge only has generic security expectations. Telling it what
   with:
     endpoint: ./bot-config.json
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+    model: gpt-4.1
     scope: ./scope.yaml
 
 # 2. Scan the checked-out repo for system prompts and tool definitions
@@ -252,6 +257,7 @@ Without scope, the judge only has generic security expectations. Telling it what
   with:
     endpoint: ./bot-config.json
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+    model: gpt-4.1
     repo: .
 
 # 3. Point at the system prompt file directly
@@ -259,6 +265,7 @@ Without scope, the judge only has generic security expectations. Telling it what
   with:
     endpoint: ./bot-config.json
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+    model: gpt-4.1
     system-prompt: ./prompts/system.txt
 ```
 
@@ -358,6 +365,7 @@ steps:
     with:
       endpoint: ./bot-config.json
       provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+      model: gpt-4.1
       fail-on: '' # report-only, so findings land as alerts, not red builds
 
   - uses: github/codeql-action/upload-sarif@v3
@@ -385,6 +393,7 @@ Three built-in test engines (orchestrators), selected with `category`:
   with:
     endpoint: ./bot-config.json
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+    model: gpt-4.1
     category: humanbound/behavioral/qa
     fail-on: medium
 ```
@@ -411,6 +420,7 @@ jobs:
         with:
           endpoint: ./bot-config.json
           provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-4.1
           level: ${{ github.event_name == 'schedule' && 'system' || 'quick' }}
           fail-on: high
 ```
@@ -423,6 +433,7 @@ jobs:
   with:
     endpoint: ./bot-config.json
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+    model: gpt-4.1
 
 - uses: actions/upload-artifact@v4
   if: always() && steps.hb.outputs.results-file != ''
@@ -452,6 +463,7 @@ jobs:
         with:
           endpoint: ./bot-config.json
           provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-4.1
           level: quick
           fail-on: high
 
