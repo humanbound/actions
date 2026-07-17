@@ -155,6 +155,7 @@ Full config reference — payload templating, `$CONVERSATION` for stateless agen
 **Local mode** (works today, no account):
 
 - [Quick PR gate](#quick-pr-gate)
+- [Keep agent credentials in secrets](#keep-agent-credentials-in-secrets)
 - [Teach the judge your agent's scope](#teach-the-judge-your-agents-scope)
 - [Free local testing with Ollama](#free-local-testing-with-ollama)
 
@@ -195,6 +196,44 @@ jobs:
 ```
 
 In local mode `localhost` means the runner itself, so start the agent in the job (a background process or [service container](https://docs.github.com/en/actions/using-containerized-services/about-service-containers)). The engine runs entirely in the runner — same orchestrators, attacks, and judge as the platform; see [Local Engine](https://docs.humanbound.ai/local-engine/) for how it works.
+
+### Keep agent credentials in secrets
+
+If your agent needs auth, don't commit a `bot-config.json` containing the token — generate the config in the job and inject the secret. Two equivalent ways:
+
+**Inline JSON** (the `endpoint` input accepts JSON directly, not just a path):
+
+```yaml
+- uses: humanbound/hb-test@v1
+  with:
+    endpoint: >-
+      {"streaming": null, "chat_completion": {"endpoint":
+      "https://staging.my-agent.com/chat",
+      "headers": {"Authorization": "Bearer ${{ secrets.AGENT_TOKEN }}"},
+      "payload": {"content": "$PROMPT"}}}
+    provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+```
+
+**Or render the file in a step** — easier to read once headers grow (`jq` is preinstalled on runners, and passing secrets via `env:` keeps them out of the script text):
+
+```yaml
+- name: Render agent config
+  env:
+    AGENT_URL: ${{ vars.AGENT_URL }}
+    AGENT_TOKEN: ${{ secrets.AGENT_TOKEN }}
+  run: |
+    jq -n --arg url "$AGENT_URL" --arg auth "Bearer $AGENT_TOKEN" \
+      '{streaming: null, chat_completion: {endpoint: $url,
+        headers: {Authorization: $auth}, payload: {content: "$PROMPT"}}}' \
+      > bot-config.json
+
+- uses: humanbound/hb-test@v1
+  with:
+    endpoint: ./bot-config.json
+    provider-api-key: ${{ secrets.OPENAI_API_KEY }}
+```
+
+GitHub automatically masks secret values if they ever appear in logs, and the action never prints the config contents. The scope file rarely needs this treatment — permitted/restricted intents usually aren't secret, and versioning them with the agent is a feature — but the same render-a-file pattern works for `scope:` too, or skip the file entirely with `repo: .` / `system-prompt:` extraction.
 
 ### Teach the judge your agent's scope
 
