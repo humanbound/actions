@@ -93,7 +93,7 @@ jobs:
         # the empty-string check matters: upload-artifact hard-fails on an
         # empty path input when the action failed before exporting results
         if: always() && steps.secrets.outputs.available == 'true' && steps.hb.outputs.results-file != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-results
           path: ${{ steps.hb.outputs.results-file }}
