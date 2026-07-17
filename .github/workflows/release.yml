@@ -1,7 +1,10 @@
 name: Release
 
-# On every semver tag (v1.2.3), move the matching major tag (v1) so users
-# pinned to `humanbound/hb-test@v1` get the release automatically.
+# On every semver tag (v1.2.3):
+#   1. create the GitHub Release, with notes extracted from CHANGELOG.md
+#      (same mechanism as the humanbound CLI repo)
+#   2. move the matching major tag (v1) so users pinned to
+#      `humanbound/hb-test@v1` get the release automatically
 on:
   push:
     tags:
@@ -11,10 +14,32 @@ permissions:
   contents: write
 
 jobs:
-  major-tag:
+  release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
+
+      - name: Extract changelog entry for this tag
+        id: changelog
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          VERSION="${TAG#v}"
+          awk "/^## \[${VERSION}\]/{flag=1;print;next}/^## \[/{flag=0}flag" CHANGELOG.md > release_notes.md
+          if [ -s release_notes.md ]; then
+            echo "has_notes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_notes=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No CHANGELOG.md section found for ${VERSION}; falling back to auto-generated notes."
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          body_path: release_notes.md
+          generate_release_notes: ${{ steps.changelog.outputs.has_notes == 'false' }}
+
       - name: Update major version tag
         run: |
           MAJOR="${GITHUB_REF_NAME%%.*}"   # v1.2.3 -> v1

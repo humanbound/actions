@@ -49,6 +49,31 @@ users' workflows, and every dependency would become their dependency.
 - New inputs need: a description in `action.yml`, a row in the README inputs
   table, and validation in the "Detect mode" step if they're mode-dependent.
 
+## Releasing (maintainers)
+
+Same flow as the CLI repo — a release PR, then a tag; automation does the rest:
+
+1. **Release PR**: branch `chore/release-v1.1.0`; in `CHANGELOG.md` rename
+   `## [Unreleased]` to `## [1.1.0] - YYYY-MM-DD` and add a fresh empty
+   `## [Unreleased]` above it. Commit as
+   `chore(release): date CHANGELOG for v1.1.0` (signed off), open a PR, merge.
+2. **Tag the merge commit**:
+
+   ```bash
+   git checkout main && git pull
+   git tag v1.1.0 && git push origin v1.1.0
+   ```
+
+3. **`release.yml` does the rest**: creates the GitHub Release with the
+   `[1.1.0]` CHANGELOG section as the notes (auto-generated notes as fallback),
+   and force-moves the `v1` major tag so `@v1` users get the release.
+
+Marketplace note: the **first** listing is manual (draft the release in the UI
+once, tick "Publish this Action to the GitHub Marketplace", accept the
+agreement). After that, verify a workflow-created release shows up on the
+listing — if a version doesn't appear, edit the release in the UI and tick the
+Marketplace checkbox.
+
 ## Developer Certificate of Origin (DCO) — required
 
 Contributions must be signed off under the
