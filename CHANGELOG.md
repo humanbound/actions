@@ -6,14 +6,31 @@ Users pin the moving major tag (`v1`) or an exact release (`v1.0.0`).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-20
+
 ### Changed
 
+- The `version` input now defaults to `2.6.0` — the CLI release this action is
+  tested against — instead of installing the latest published release. Set
+  `version: ""` to opt back into the latest release.
 - Local mode now **requires an explicit `model`** for every provider except
   ollama, enforced with a clear error in the detect step — the current CLI
   crashes with `KeyError: 'model'` when none is set (its docs call the model
   optional, but no provider default is implemented). All README examples now
   include `model: gpt-4.1`. The check will be relaxed once a CLI release ships
   provider defaults.
+
+### Security
+
+- Pinned every third-party and first-party GitHub Action used in the workflows
+  to a full commit SHA (with a version comment), so a moved tag cannot inject
+  code between Dependabot updates. Grouped Dependabot action updates into a
+  single weekly PR.
+
+### Added
+
+- CI now validates every `action.yml` in the repository (the root action plus
+  any future subdirectory action).
 
 ## [1.0.0] - 2026-07-17
 
