@@ -1,4 +1,4 @@
-# Contributing to hb-test
+# Contributing to Humanbound Actions
 
 Thanks for your interest in improving the Humanbound GitHub Action.
 
@@ -90,5 +90,5 @@ branch) and force-push. CI enforces this on every PR.
 
 ## Reporting issues
 
-- Bugs and feature requests: [GitHub Issues](https://github.com/humanbound/hb-test/issues)
+- Bugs and feature requests: [GitHub Issues](https://github.com/humanbound/actions/issues)
 - Security vulnerabilities: see [SECURITY.md](SECURITY.md) — never a public issue

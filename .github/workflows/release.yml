@@ -4,7 +4,7 @@ name: Release
 #   1. create the GitHub Release, with notes extracted from CHANGELOG.md
 #      (same mechanism as the humanbound CLI repo)
 #   2. move the matching major tag (v1) so users pinned to
-#      `humanbound/hb-test@v1` get the release automatically
+#      `humanbound/actions@v1` get the release automatically
 on:
   push:
     tags:

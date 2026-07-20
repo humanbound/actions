@@ -2,13 +2,13 @@
   <img src="https://raw.githubusercontent.com/humanbound/humanbound/main/assets/logo-dark.svg" alt="Humanbound" width="280"/>
 </p>
 
-<h3 align="center">Humanbound Test Action</h3>
+<h3 align="center">Humanbound Actions</h3>
 
 <p align="center">
   Adversarial security testing for AI agents, on every push.
   <br/>
   Wraps <a href="https://github.com/humanbound/humanbound"><code>hb test</code></a> in a GitHub Action:
-  OWASP agentic attacks, prompt injection, and behavioral checks —
+  OWASP-aligned adversarial &amp; behavioral tests — prompt injection, tool misuse, data exfiltration, and more —
   <br/>
   findings gate your build and land in GitHub's Security tab.
 </p>
@@ -29,7 +29,7 @@
 
 ---
 
-- **OWASP agentic attacks** — multi-turn prompt injection, data exfiltration, excessive agency, and more
+- **OWASP-aligned adversarial testing** — multi-turn prompt injection, data exfiltration, excessive agency, tool misuse, and more; behavioral/QA tests too, via `category` ([test catalog](https://docs.humanbound.ai/methodology/adversarial-engine/))
 - **A real quality gate** — `fail-on: high` turns findings into a red build
 - **Findings in GitHub's Security tab** — [native SARIF output](#security-tab-sarif)
 - **Results where you work** — severity summary on the workflow run page, full JSON as an artifact
@@ -41,7 +41,7 @@ If this action is useful to you, a ⭐ on this repo and [humanbound/humanbound](
 
 | Action | Reference | What it does |
 |--------|-----------|--------------|
-| **Test** | `humanbound/hb-test@v1` | Adversarial security testing as a CI gate — documented below. |
+| **Test** | `humanbound/actions@v1` | Adversarial security testing as a CI gate — documented below. |
 
 ## Which mode?
 
@@ -63,7 +63,7 @@ The action auto-detects the mode from which credential you provide:
 <!-- start usage -->
 
 ```yaml
-- uses: humanbound/hb-test@v1
+- uses: humanbound/actions@v1
   with:
     # LOCAL MODE credential. API key for the attacker/judge LLM provider
     # (maps to HB_API_KEY). Pass a repository secret. Setting this selects
@@ -126,8 +126,9 @@ The action auto-detects the mode from which credential you provide:
     # e.g. 'Authenticated as Alice, her PII is expected'.
     context: ''
 
-    # Humanbound CLI version to install (e.g. 2.6.0).
-    # Default: latest
+    # Humanbound CLI version to install (e.g. 2.6.0). Set to '' for the
+    # latest published release.
+    # Default: 2.6.0 (the tested CLI version)
     version: ''
 
     # Path where the JSON results export is written.
@@ -194,7 +195,7 @@ jobs:
 
       - run: docker compose up -d agent # or however your agent starts
 
-      - uses: humanbound/hb-test@v1
+      - uses: humanbound/actions@v1
         with:
           endpoint: ./bot-config.json
           provider-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -212,7 +213,7 @@ If your agent needs auth, don't commit a `bot-config.json` containing the token 
 **Inline JSON** (the `endpoint` input accepts JSON directly, not just a path):
 
 ```yaml
-- uses: humanbound/hb-test@v1
+- uses: humanbound/actions@v1
   with:
     endpoint: >-
       {"streaming": null, "chat_completion": {"endpoint":
@@ -236,7 +237,7 @@ If your agent needs auth, don't commit a `bot-config.json` containing the token 
         headers: {Authorization: $auth}, payload: {content: "$PROMPT"}}}' \
       > bot-config.json
 
-- uses: humanbound/hb-test@v1
+- uses: humanbound/actions@v1
   with:
     endpoint: ./bot-config.json
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -251,7 +252,7 @@ Without scope, the judge only has generic security expectations. Telling it what
 
 ```yaml
 # 1. Explicit scope file — most precise
-- uses: humanbound/hb-test@v1
+- uses: humanbound/actions@v1
   with:
     endpoint: ./bot-config.json
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -259,7 +260,7 @@ Without scope, the judge only has generic security expectations. Telling it what
     scope: ./scope.yaml
 
 # 2. Scan the checked-out repo for system prompts and tool definitions
-- uses: humanbound/hb-test@v1
+- uses: humanbound/actions@v1
   with:
     endpoint: ./bot-config.json
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -267,7 +268,7 @@ Without scope, the judge only has generic security expectations. Telling it what
     repo: .
 
 # 3. Point at the system prompt file directly
-- uses: humanbound/hb-test@v1
+- uses: humanbound/actions@v1
   with:
     endpoint: ./bot-config.json
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -306,7 +307,7 @@ No paid LLM key: run the attacker/judge on Ollama inside the job. This works on 
     for i in $(seq 1 30); do curl -sf http://127.0.0.1:11434/ >/dev/null && break; sleep 1; done
     ollama pull llama3.2:3b
 
-- uses: humanbound/hb-test@v1
+- uses: humanbound/actions@v1
   with:
     endpoint: ./bot-config.json
     provider: ollama
@@ -326,7 +327,7 @@ Because the engine runs on humanbound.ai, your agent must be reachable from the 
 ### Platform PR gate
 
 ```yaml
-- uses: humanbound/hb-test@v1
+- uses: humanbound/actions@v1
   with:
     api-key: ${{ secrets.HUMANBOUND_API_KEY }}
     # endpoint optional — defaults to the project's stored integration
@@ -341,7 +342,7 @@ No checkout, no agent boot, no LLM key: the project already knows how to reach y
 `endpoint` in platform mode _overrides_ the project's stored integration for that run — same project history, different target. Useful for per-PR preview environments:
 
 ```yaml
-- uses: humanbound/hb-test@v1
+- uses: humanbound/actions@v1
   with:
     api-key: ${{ secrets.HUMANBOUND_API_KEY }}
     endpoint: >-
@@ -366,7 +367,7 @@ permissions:
 steps:
   - uses: actions/checkout@v4
 
-  - uses: humanbound/hb-test@v1
+  - uses: humanbound/actions@v1
     id: hb
     with:
       endpoint: ./bot-config.json
@@ -395,7 +396,7 @@ Three built-in test engines (orchestrators), selected with `category`:
 | `humanbound/behavioral/qa`                       | Intent boundaries, response quality, functional correctness   | "Does the agent stay on task?" |
 
 ```yaml
-- uses: humanbound/hb-test@v1
+- uses: humanbound/actions@v1
   with:
     endpoint: ./bot-config.json
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -422,7 +423,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose up -d agent
-      - uses: humanbound/hb-test@v1
+      - uses: humanbound/actions@v1
         with:
           endpoint: ./bot-config.json
           provider-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -434,7 +435,7 @@ jobs:
 ### Keep results as artifacts
 
 ```yaml
-- uses: humanbound/hb-test@v1
+- uses: humanbound/actions@v1
   id: hb
   with:
     endpoint: ./bot-config.json
@@ -465,7 +466,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose up -d agent
-      - uses: humanbound/hb-test@v1
+      - uses: humanbound/actions@v1
         with:
           endpoint: ./bot-config.json
           provider-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -477,7 +478,7 @@ jobs:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: humanbound/hb-test@v1 # platform mode: coming soon
+      - uses: humanbound/actions@v1 # platform mode: coming soon
         with:
           api-key: ${{ secrets.HUMANBOUND_API_KEY }}
           level: system
@@ -508,7 +509,7 @@ Attacker/judge calls cost LLM tokens (your key in local mode; the platform's pro
 
 # Contributing
 
-Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) (DCO sign-off required). Bugs in `hb test` itself belong in the [CLI repo](https://github.com/humanbound/humanbound/issues); action wiring issues belong [here](https://github.com/humanbound/hb-test/issues). Security reports: [SECURITY.md](SECURITY.md), never a public issue. Release history: [CHANGELOG](CHANGELOG.md).
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) (DCO sign-off required). Bugs in `hb test` itself belong in the [CLI repo](https://github.com/humanbound/humanbound/issues); action wiring issues belong [here](https://github.com/humanbound/actions/issues). Security reports: [SECURITY.md](SECURITY.md), never a public issue. Release history: [CHANGELOG](CHANGELOG.md).
 
 # License
 

@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/humanbound/hb-test/security/advisories/new
+    url: https://github.com/humanbound/actions/security/advisories/new
     about: Report privately — never as a public issue. See SECURITY.md.
   - name: Humanbound CLI issues
     url: https://github.com/humanbound/humanbound/issues

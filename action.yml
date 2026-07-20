@@ -1,5 +1,5 @@
 name: "Humanbound — AI Agent Security Testing"
-description: "Adversarial security testing for AI agents in CI: OWASP agentic attacks, prompt injection, behavioral checks."
+description: "Adversarial & behavioral security testing for AI agents in CI: prompt injection, tool misuse, data exfiltration, and more."
 author: "Humanbound"
 
 branding:
@@ -192,7 +192,7 @@ runs:
         # TODO: set to the humanbound release that adds HUMANBOUND_API_KEY headless auth.
         MIN_PLATFORM_VERSION=""
         if [ -z "$MIN_PLATFORM_VERSION" ]; then
-          echo "::error::Platform mode (api-key) is not available yet — headless project-key auth is coming soon. Use provider-api-key (local mode) meanwhile. See https://github.com/humanbound/hb-test#platform-mode"
+          echo "::error::Platform mode (api-key) is not available yet — headless project-key auth is coming soon. Use provider-api-key (local mode) meanwhile. See https://github.com/humanbound/actions#platform-mode"
           exit 1
         fi
         installed=$(hb --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
