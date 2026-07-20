@@ -13,7 +13,7 @@ jobs:
     name: Validate action.yml
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: YAML syntax + required fields
         run: |
           python - <<'PY'
@@ -33,7 +33,7 @@ jobs:
     name: SARIF transform tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Run unit tests
         run: python3 -m unittest discover -s test -v
 
@@ -41,8 +41,8 @@ jobs:
     name: CLI installs and runs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
       - name: Install and verify
@@ -61,7 +61,7 @@ jobs:
       contents: read
       security-events: write # SARIF upload (dormant while the repo is private)
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Check secret availability
         id: secrets
@@ -96,7 +96,7 @@ jobs:
         # the empty-string check matters: upload-artifact hard-fails on an
         # empty path input when the action failed before exporting results
         if: always() && steps.secrets.outputs.available == 'true' && steps.hb.outputs.results-file != ''
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-results
           path: ${{ steps.hb.outputs.results-file }}
@@ -106,6 +106,6 @@ jobs:
       # private repos requires the paid Code Security add-on).
       - name: Upload SARIF to code scanning
         if: always() && github.event.repository.visibility == 'public' && steps.hb.outputs.sarif-file != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@b7351df727350dca84cb9d725d57dcf5bc82ba26 # v3.37.1
         with:
           sarif_file: ${{ steps.hb.outputs.sarif-file }}

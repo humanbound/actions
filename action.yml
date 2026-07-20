@@ -75,9 +75,9 @@ inputs:
 
   # --- Plumbing ---
   version:
-    description: "Humanbound CLI version to install (e.g. 2.6.0). Empty = latest."
+    description: "Humanbound CLI version to install (e.g. 2.6.0). Defaults to the version this action release was tested against; override with a specific version, or set to \"\" for the latest published release."
     required: false
-    default: ""
+    default: "2.6.0"
   results-file:
     description: "Path where the JSON results export is written."
     required: false
