@@ -14,11 +14,11 @@
 </p>
 
 <p align="center">
-  <a href="#usage">Usage</a> &middot;
+  <a href="#quickstart">Quickstart</a> &middot;
+  <a href="#how-it-works">How it works</a> &middot;
   <a href="#scenarios">Scenarios</a> &middot;
-  <a href="#security-tab-sarif">Security Tab</a> &middot;
-  <a href="https://docs.humanbound.ai/">Documentation</a> &middot;
-  <a href="#contributing">Contributing</a>
+  <a href="#inputs">Inputs</a> &middot;
+  <a href="https://docs.humanbound.ai/">Documentation</a>
 </p>
 
 <p align="center">
@@ -43,6 +43,46 @@ If this action is useful to you, a ⭐ on this repo and [humanbound/humanbound](
 |--------|-----------|--------------|
 | **Test** | `humanbound/actions@v1` | Adversarial security testing as a CI gate — documented below. |
 
+## Quickstart
+
+Boot your agent in the job, point the action at it, and fail the build on high-severity findings — local mode, no account needed:
+
+```yaml
+# .github/workflows/agent-security.yml
+name: Agent security
+on: [pull_request]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - run: docker compose up -d agent # start your agent, reachable on localhost
+
+      - uses: humanbound/actions@v1
+        with:
+          # Your agent's config — inline here; a file or a build step also work (see below)
+          endpoint: |
+            {
+              "streaming": null,
+              "chat_completion": {
+                "endpoint": "http://localhost:8000/chat",
+                "payload": { "content": "$PROMPT" }
+              }
+            }
+          provider-api-key: ${{ secrets.OPENAI_API_KEY }} # the attacker/judge LLM key
+          model: gpt-4.1
+          fail-on: high
+```
+
+The action installs the Humanbound CLI, attacks your agent, and fails the job if it finds anything at `high` or above.
+
+## How it works
+
+1. **You point it at your agent.** `endpoint` describes how to call it; `$PROMPT` is swapped in for each attack message.
+2. **It runs adversarial tests.** The Humanbound CLI generates multi-turn attacks — OWASP-aligned prompt injection, tool misuse, data exfiltration, and more — escalating as it goes.
+3. **An LLM judge scores every response** and records findings with severities.
+4. **Findings gate your build and surface where you work.** `fail-on` sets the exit code, a severity summary lands on the run page, and findings can flow into the **Security tab** as SARIF.
+
 ## Which mode?
 
 The action auto-detects the mode from which credential you provide:
@@ -58,92 +98,15 @@ The action auto-detects the mode from which credential you provide:
 
 > **Platform mode is coming soon.** Headless project-key auth is not yet released in the CLI; today the action supports **local mode**. The `api-key` input and platform path are wired and will light up when the CLI ships — your workflow won't need to change.
 
-# Usage
+## Configuring your agent (`endpoint`)
 
-<!-- start usage -->
+The `endpoint` input is your agent's integration config — it tells the tester bot how to call your agent (`$PROMPT` is replaced with each attack message; replies can be plain text or JSON, and common content fields are detected automatically). Provide it in whichever form fits:
 
-```yaml
-- uses: humanbound/actions@v1
-  with:
-    # LOCAL MODE credential. API key for the attacker/judge LLM provider
-    # (maps to HB_API_KEY). Pass a repository secret. Setting this selects
-    # local mode.
-    provider-api-key: ''
+- **Inline JSON** — paste the config straight into the workflow. Fine for simple configs, and you can reference `${{ secrets.* }}` for an auth header.
+- **Built in a step** — render the JSON in an earlier CI step (e.g. with `jq`), then pass the file path. Best when the config needs secrets or grows large — see [Keep agent credentials in secrets](#keep-agent-credentials-in-secrets).
+- **A committed file** — e.g. `endpoint: ./bot-config.json`, checked into your repo. Simplest when there are no secrets.
 
-    # PLATFORM MODE credential. Humanbound project API key (maps to
-    # HUMANBOUND_API_KEY). Pass a repository secret. Setting this selects
-    # platform mode. Provide exactly one of the two credentials.
-    api-key: ''
-
-    # Agent integration config — path to a JSON file (relative to the
-    # workspace) or an inline JSON string. Same shape as `hb connect
-    # --endpoint`. Required in local mode. Optional in platform mode
-    # (defaults to the project's stored integration).
-    endpoint: ''
-
-    # LOCAL MODE. LLM provider used as attacker/judge: openai, anthropic,
-    # ollama, ...
-    # Default: openai
-    provider: ''
-
-    # LOCAL MODE. Attacker/judge model (e.g. gpt-4.1, llama3.1:8b).
-    # Required for every provider except ollama — the current CLI has no
-    # provider default.
-    model: ''
-
-    # LOCAL MODE. Custom provider endpoint (e.g. a self-hosted ollama URL).
-    provider-endpoint: ''
-
-    # Test depth: quick | unit (~20 min) | system (~45 min) | acceptance (~90 min).
-    # Note: quick currently runs at unit depth in the CLI (~20 min); a true
-    # short scan is planned upstream.
-    # Default: quick
-    level: ''
-
-    # Test category: humanbound/adversarial/owasp_agentic,
-    # humanbound/adversarial/owasp_single_turn, humanbound/behavioral/qa.
-    # Default: the CLI default (OWASP agentic)
-    category: ''
-
-    # Fail the job when findings of this severity (or higher) exist:
-    # critical | high | medium | low | any. Empty string = report-only.
-    # Default: high
-    fail-on: ''
-
-    # Path to a scope file (YAML/JSON with permitted/restricted intents)
-    # so the judge knows what the agent is supposed to do.
-    scope: ''
-
-    # Path to the agent's system prompt file, used for scope extraction
-    # (alternative to `scope`).
-    system-prompt: ''
-
-    # Repository path to scan for scope discovery (system prompts, tool
-    # definitions). In CI, '.' scans the checked-out workspace.
-    repo: ''
-
-    # Extra context for the judge (string or path to a .txt file),
-    # e.g. 'Authenticated as Alice, her PII is expected'.
-    context: ''
-
-    # Humanbound CLI version to install (e.g. 2.6.0). Set to '' for the
-    # latest published release.
-    # Default: 2.6.0 (the tested CLI version)
-    version: ''
-
-    # Path where the JSON results export is written.
-    # Default: humanbound-results.json
-    results-file: ''
-
-    # Path where SARIF is written for GitHub code scanning.
-    # Empty string disables SARIF generation.
-    # Default: humanbound.sarif
-    sarif-file: ''
-```
-
-<!-- end usage -->
-
-The agent integration config (`endpoint`) tells the tester bot how to call your agent — `$PROMPT` is replaced with each attack message; replies can be plain text or JSON (common content fields are detected automatically):
+All three produce the same JSON shape:
 
 ```json
 {
@@ -197,7 +160,16 @@ jobs:
 
       - uses: humanbound/actions@v1
         with:
-          endpoint: ./bot-config.json
+          # Inline config (recommended for a simple, secret-free agent).
+          # You can also build it in a step or commit a file — see below.
+          endpoint: |
+            {
+              "streaming": null,
+              "chat_completion": {
+                "endpoint": "http://localhost:8000/chat",
+                "payload": { "content": "$PROMPT" }
+              }
+            }
           provider-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: gpt-4.1
           level: quick
@@ -215,11 +187,15 @@ If your agent needs auth, don't commit a `bot-config.json` containing the token 
 ```yaml
 - uses: humanbound/actions@v1
   with:
-    endpoint: >-
-      {"streaming": null, "chat_completion": {"endpoint":
-      "https://staging.my-agent.com/chat",
-      "headers": {"Authorization": "Bearer ${{ secrets.AGENT_TOKEN }}"},
-      "payload": {"content": "$PROMPT"}}}
+    endpoint: |
+      {
+        "streaming": null,
+        "chat_completion": {
+          "endpoint": "https://staging.my-agent.com/chat",
+          "headers": { "Authorization": "Bearer ${{ secrets.AGENT_TOKEN }}" },
+          "payload": { "content": "$PROMPT" }
+        }
+      }
     provider-api-key: ${{ secrets.OPENAI_API_KEY }}
     model: gpt-4.1
 ```
@@ -276,7 +252,7 @@ Without scope, the judge only has generic security expectations. Telling it what
     system-prompt: ./prompts/system.txt
 ```
 
-A scope file lists permitted and restricted intents:
+A scope file lists permitted and restricted intents. Note that `scope` is a **file path only** — unlike `endpoint`, it does not accept inline content, so either commit the file, render it in a step, or skip it entirely with the `repo:` / `system-prompt:` discovery shown above:
 
 ```yaml
 # scope.yaml
@@ -345,10 +321,15 @@ No checkout, no agent boot, no LLM key: the project already knows how to reach y
 - uses: humanbound/actions@v1
   with:
     api-key: ${{ secrets.HUMANBOUND_API_KEY }}
-    endpoint: >-
-      {"streaming": null, "chat_completion": {"endpoint":
-      "https://pr-${{ github.event.number }}.preview.example.com/chat",
-      "headers": {}, "payload": {"content": "$PROMPT"}}}
+    endpoint: |
+      {
+        "streaming": null,
+        "chat_completion": {
+          "endpoint": "https://pr-${{ github.event.number }}.preview.example.com/chat",
+          "headers": {},
+          "payload": { "content": "$PROMPT" }
+        }
+      }
     level: quick
     fail-on: high
 ```
@@ -494,6 +475,29 @@ permissions:
   contents: read # checkout
   security-events: write # only if uploading SARIF to the Security tab
 ```
+
+# Inputs
+
+Everything is optional except a credential (`provider-api-key` for local mode **or** `api-key` for platform mode) and, in local mode, `endpoint`.
+
+| Input | Mode | Description | Default |
+|-------|------|-------------|---------|
+| `provider-api-key` | Local | Attacker/judge LLM provider key (maps to `HB_API_KEY`); setting it selects local mode. | — |
+| `api-key` | Platform | Humanbound project API key (maps to `HUMANBOUND_API_KEY`); setting it selects platform mode. | — |
+| `endpoint` | Both | Agent integration config — inline JSON, a file path, or built in a step. Required in local mode; optional override in platform. | — |
+| `provider` | Local | Attacker/judge LLM provider (`openai`, `anthropic`, `ollama`, …). | `openai` |
+| `model` | Local | Attacker/judge model (e.g. `gpt-4.1`). Required for every provider except `ollama`. | — |
+| `provider-endpoint` | Local | Custom provider endpoint (e.g. a self-hosted Ollama URL). | — |
+| `level` | Both | Test depth: `quick` / `unit` / `system` / `acceptance`. | `quick` |
+| `category` | Both | Test engine: `humanbound/adversarial/owasp_agentic`, `…/owasp_single_turn`, or `humanbound/behavioral/qa`. | OWASP agentic |
+| `fail-on` | Both | Fail the job at this severity or higher: `critical`/`high`/`medium`/`low`/`any`. Empty = report-only. | `high` |
+| `scope` | Local | Path to a scope file (permitted/restricted intents). File only — not inline. | — |
+| `system-prompt` | Local | Path to the agent's system prompt, for scope extraction. | — |
+| `repo` | Local | Repo path to scan for scope discovery (`.` = the checked-out workspace). | — |
+| `context` | Both | Extra judge context — a string or a path to a `.txt` file. | — |
+| `version` | Both | Humanbound CLI version to install. Set `""` for the latest release. | `2.6.0` |
+| `results-file` | Both | Path where the JSON results export is written. | `humanbound-results.json` |
+| `sarif-file` | Both | Path where SARIF is written. Empty disables SARIF. | `humanbound.sarif` |
 
 # Outputs
 
