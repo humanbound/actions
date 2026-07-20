@@ -37,6 +37,12 @@
 
 If this action is useful to you, a ⭐ on this repo and [humanbound/humanbound](https://github.com/humanbound/humanbound) helps others find it.
 
+## Actions in this repo
+
+| Action | Reference | What it does |
+|--------|-----------|--------------|
+| **Test** | `humanbound/hb-test@v1` | Adversarial security testing as a CI gate — documented below. |
+
 ## Which mode?
 
 The action auto-detects the mode from which credential you provide:

@@ -17,16 +17,23 @@ jobs:
       - name: YAML syntax + required fields
         run: |
           python - <<'PY'
-          import yaml, sys
+          import glob, yaml, sys
 
-          with open("action.yml") as f:
-              action = yaml.safe_load(f)
+          # Validate every action in the repo: the root test action plus any
+          # future subdirectory (per-integration) actions.
+          files = sorted(glob.glob("**/action.yml", recursive=True))
+          assert files, "no action.yml found"
 
-          for field in ("name", "description", "runs", "inputs"):
-              assert field in action, f"missing top-level field: {field}"
-          assert action["runs"]["using"] == "composite"
-          assert len(action["description"]) <= 125, "Marketplace caps description at 125 chars"
-          print("action.yml OK")
+          for path in files:
+              with open(path) as f:
+                  action = yaml.safe_load(f)
+              for field in ("name", "description", "runs"):
+                  assert field in action, f"{path}: missing top-level field: {field}"
+              assert action["runs"]["using"] in ("composite", "docker", "node20"), \
+                  f"{path}: unexpected runs.using: {action['runs']['using']}"
+              assert len(action["description"]) <= 125, \
+                  f"{path}: Marketplace caps description at 125 chars"
+              print(f"{path} OK")
           PY
 
   sarif:
