@@ -89,14 +89,14 @@ The action auto-detects the mode from which credential you provide:
 
 |                            | **Local mode**                    | **Platform mode**                                 |
 | -------------------------- | --------------------------------- | ------------------------------------------------- |
-| **Credential**             | `provider-api-key` (your LLM key) | `api-key` (Humanbound project key)                |
+| **Credential**             | `provider-api-key` (your LLM key) | `api-key` (Humanbound user key, `hb_…`)           |
 | **Where the engine runs**  | Inside the runner                 | On humanbound.ai                                  |
 | **Who reaches your agent** | The runner (boot it in the job)   | Humanbound's servers (needs a public/staging URL) |
 | **Attacker/judge LLM**     | Your key, in CI                   | A provider configured on the platform             |
 | **Account needed**         | No                                | Yes (+ a project)                                 |
 | **Results**                | CI artifact + run summary         | CI artifact + run summary + dashboard             |
 
-> **Platform mode is coming soon.** Headless project-key auth is not yet released in the CLI; today the action supports **local mode**. The `api-key` input and platform path are wired and will light up when the CLI ships — your workflow won't need to change.
+> **Platform mode requires humanbound ≥ 2.8.0** (the CLI release with headless `HUMANBOUND_API_KEY` auth). The action checks the installed version and fails with a clear message on older releases.
 
 ## Configuring your agent (`endpoint`)
 
@@ -130,7 +130,7 @@ Full config reference — payload templating, `$CONVERSATION` for stateless agen
 - [Teach the judge your agent's scope](#teach-the-judge-your-agents-scope)
 - [Free local testing with Ollama](#free-local-testing-with-ollama)
 
-**Platform mode** (coming soon — [see above](#which-mode)):
+**Platform mode** ([see above](#which-mode)):
 
 - [Platform PR gate](#platform-pr-gate)
 - [Test a preview deployment against your project](#test-a-preview-deployment-against-your-project)
@@ -294,9 +294,9 @@ No paid LLM key: run the attacker/judge on Ollama inside the job. This works on 
 
 ## Platform mode
 
-> **Coming soon.** Headless project-key auth is not yet released in the CLI; the `api-key` input and platform path are wired and will light up when it ships — these workflows won't need to change.
+> **Requires humanbound ≥ 2.8.0** — the CLI release with headless `HUMANBOUND_API_KEY` auth.
 
-For teams on [humanbound.ai](https://humanbound.ai): the engine runs server-side (no LLM key in CI) and results land in your dashboard with full experiment history. One-time setup at your terminal — [`hb connect --endpoint ./bot-config.json`](https://docs.humanbound.ai/getting-started/quick-start/#step-2-connect-your-agent) creates the project, extracts scope, and stores your agent config — then copy the project's API key into a repository secret.
+For teams on [humanbound.ai](https://humanbound.ai): the engine runs server-side (no LLM key in CI) and results land in your dashboard with full experiment history. One-time setup at your terminal — [`hb connect --endpoint ./bot-config.json`](https://docs.humanbound.ai/getting-started/quick-start/#step-2-connect-your-agent) creates the project, extracts scope, and stores your agent config — then create a key with `hb api-keys create --scope write --org <org-id> --projects <project-id>` and copy it into a repository secret.
 
 Because the engine runs on humanbound.ai, your agent must be reachable from the internet (a staging or production URL) — a `localhost` agent booted in the job won't work in platform mode; use local mode for that.
 
@@ -306,6 +306,8 @@ Because the engine runs on humanbound.ai, your agent must be reachable from the 
 - uses: humanbound/actions@v1
   with:
     api-key: ${{ secrets.HUMANBOUND_API_KEY }}
+    org-id: ${{ vars.HUMANBOUND_ORG_ID }}
+    project-id: ${{ vars.HUMANBOUND_PROJECT_ID }}
     # endpoint optional — defaults to the project's stored integration
     level: quick
     fail-on: high
@@ -321,6 +323,8 @@ No checkout, no agent boot, no LLM key: the project already knows how to reach y
 - uses: humanbound/actions@v1
   with:
     api-key: ${{ secrets.HUMANBOUND_API_KEY }}
+    org-id: ${{ vars.HUMANBOUND_ORG_ID }}
+    project-id: ${{ vars.HUMANBOUND_PROJECT_ID }}
     endpoint: |
       {
         "streaming": null,
@@ -459,9 +463,11 @@ jobs:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: humanbound/actions@v1 # platform mode: coming soon
+      - uses: humanbound/actions@v1
         with:
           api-key: ${{ secrets.HUMANBOUND_API_KEY }}
+          org-id: ${{ vars.HUMANBOUND_ORG_ID }}
+          project-id: ${{ vars.HUMANBOUND_PROJECT_ID }}
           level: system
           fail-on: high
 ```
@@ -483,7 +489,9 @@ Everything is optional except a credential (`provider-api-key` for local mode **
 | Input | Mode | Description | Default |
 |-------|------|-------------|---------|
 | `provider-api-key` | Local | Attacker/judge LLM provider key (maps to `HB_API_KEY`); setting it selects local mode. | — |
-| `api-key` | Platform | Humanbound project API key (maps to `HUMANBOUND_API_KEY`); setting it selects platform mode. | — |
+| `api-key` | Platform | Humanbound user API key, `hb_…` from `hb api-keys create` (maps to `HUMANBOUND_API_KEY`); setting it selects platform mode. | — |
+| `org-id` | Platform | Organisation that owns the project (maps to `HUMANBOUND_ORG_ID`). Required — the results export resolves the org from it. | — |
+| `project-id` | Platform | Project to test (maps to `HUMANBOUND_PROJECT_ID`). Required — a headless run has no stored project selection. | — |
 | `endpoint` | Both | Agent integration config — inline JSON, a file path, or built in a step. Required in local mode; optional override in platform. | — |
 | `provider` | Local | Attacker/judge LLM provider (`openai`, `anthropic`, `ollama`, …). | `openai` |
 | `model` | Local | Attacker/judge model (e.g. `gpt-4.1`). Required for every provider except `ollama`. | — |
@@ -495,7 +503,7 @@ Everything is optional except a credential (`provider-api-key` for local mode **
 | `system-prompt` | Local | Path to the agent's system prompt, for scope extraction. | — |
 | `repo` | Local | Repo path to scan for scope discovery (`.` = the checked-out workspace). | — |
 | `context` | Both | Extra judge context — a string or a path to a `.txt` file. | — |
-| `version` | Both | Humanbound CLI version to install. Set `""` for the latest release. | `2.6.0` |
+| `version` | Both | Humanbound CLI version to install. Set `""` for the latest release. | `2.8.0` |
 | `results-file` | Both | Path where the JSON results export is written. | `humanbound-results.json` |
 | `sarif-file` | Both | Path where SARIF is written. Empty disables SARIF. | `humanbound.sarif` |
 

@@ -16,7 +16,15 @@ inputs:
     required: false
     default: ""
   api-key:
-    description: "PLATFORM MODE. Humanbound project API key (maps to HUMANBOUND_API_KEY). Use a repository secret."
+    description: "PLATFORM MODE. Humanbound user API key — hb_… from `hb api-keys create` (maps to HUMANBOUND_API_KEY). Use a repository secret."
+    required: false
+    default: ""
+  org-id:
+    description: "PLATFORM MODE. Organisation that owns the project (maps to HUMANBOUND_ORG_ID). Needed to export results — `hb logs` resolves the org from it; without it the results file comes back empty."
+    required: false
+    default: ""
+  project-id:
+    description: "PLATFORM MODE. Project to test (maps to HUMANBOUND_PROJECT_ID). Required in platform mode: a headless run has no stored project selection."
     required: false
     default: ""
 
@@ -75,9 +83,9 @@ inputs:
 
   # --- Plumbing ---
   version:
-    description: "Humanbound CLI version to install (e.g. 2.6.0). Defaults to the version this action release was tested against; override with a specific version, or set to \"\" for the latest published release."
+    description: "Humanbound CLI version to install (e.g. 2.8.0). Defaults to the version this action release was tested against; override with a specific version, or set to \"\" for the latest published release."
     required: false
-    default: "2.6.0"
+    default: "2.8.0"
   results-file:
     description: "Path where the JSON results export is written."
     required: false
@@ -115,6 +123,7 @@ runs:
         INPUT_SCOPE: ${{ inputs.scope }}
         INPUT_SYSTEM_PROMPT: ${{ inputs.system-prompt }}
         INPUT_REPO: ${{ inputs.repo }}
+        INPUT_PROJECT_ID: ${{ inputs.project-id }}
       run: |
         has_provider=$([ -n "$PROVIDER_API_KEY" ] && echo 1 || echo 0)
         has_api=$([ -n "$API_KEY" ] && echo 1 || echo 0)
@@ -134,6 +143,11 @@ runs:
         # Per-mode input validation
         if [ "$mode" = local ] && [ -z "$INPUT_ENDPOINT" ]; then
           echo "::error::Local mode requires 'endpoint' (path to your agent integration JSON)."
+          exit 1
+        fi
+
+        if [ "$mode" = platform ] && [ -z "$INPUT_PROJECT_ID" ]; then
+          echo "::error::Platform mode requires 'project-id' — a headless run has no stored project selection."
           exit 1
         fi
 
@@ -183,18 +197,15 @@ runs:
         fi
         hb --version
 
-    # 3. Platform readiness gate: headless API-key auth ships in a future CLI.
-    #    Until MIN_PLATFORM_VERSION is real, platform mode exits with a clear message.
+    # 3. Platform readiness gate: headless HUMANBOUND_API_KEY auth needs a CLI
+    #    that sends the x-api-key header. Older CLIs ignore the key and fail to
+    #    authenticate, so check the installed version before running.
     - name: Check platform readiness
       if: steps.detect.outputs.mode == 'platform'
       shell: bash
       run: |
-        # TODO: set to the humanbound release that adds HUMANBOUND_API_KEY headless auth.
-        MIN_PLATFORM_VERSION=""
-        if [ -z "$MIN_PLATFORM_VERSION" ]; then
-          echo "::error::Platform mode (api-key) is not available yet — headless project-key auth is coming soon. Use provider-api-key (local mode) meanwhile. See https://github.com/humanbound/actions#platform-mode"
-          exit 1
-        fi
+        # Must match the humanbound release that adds HUMANBOUND_API_KEY headless auth.
+        MIN_PLATFORM_VERSION="2.8.0"
         installed=$(hb --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
         if [ -z "$installed" ]; then
           echo "::error::Could not determine the installed humanbound version."
@@ -216,8 +227,10 @@ runs:
         HB_API_KEY: ${{ inputs.provider-api-key }}
         HB_MODEL: ${{ inputs.model }}
         HB_ENDPOINT: ${{ inputs.provider-endpoint }}
-        # Platform-mode auth
+        # Platform-mode auth + headless selection
         HUMANBOUND_API_KEY: ${{ inputs.api-key }}
+        HUMANBOUND_ORG_ID: ${{ inputs.org-id }}
+        HUMANBOUND_PROJECT_ID: ${{ inputs.project-id }}
         # Shared inputs
         INPUT_ENDPOINT: ${{ inputs.endpoint }}
         INPUT_LEVEL: ${{ inputs.level }}
@@ -234,6 +247,8 @@ runs:
         if [ -z "$HB_ENDPOINT" ]; then unset HB_ENDPOINT; fi
         if [ -z "$HB_API_KEY" ]; then unset HB_API_KEY; fi
         if [ -z "$HUMANBOUND_API_KEY" ]; then unset HUMANBOUND_API_KEY; fi
+        if [ -z "$HUMANBOUND_ORG_ID" ]; then unset HUMANBOUND_ORG_ID; fi
+        if [ -z "$HUMANBOUND_PROJECT_ID" ]; then unset HUMANBOUND_PROJECT_ID; fi
 
         ARGS=(test --wait)
 
@@ -272,8 +287,12 @@ runs:
         # Platform mode: hb logs must authenticate here too, or it silently
         # falls back to the (empty) local results reader.
         HUMANBOUND_API_KEY: ${{ inputs.api-key }}
+        HUMANBOUND_ORG_ID: ${{ inputs.org-id }}
+        HUMANBOUND_PROJECT_ID: ${{ inputs.project-id }}
       run: |
         if [ -z "$HUMANBOUND_API_KEY" ]; then unset HUMANBOUND_API_KEY; fi
+        if [ -z "$HUMANBOUND_ORG_ID" ]; then unset HUMANBOUND_ORG_ID; fi
+        if [ -z "$HUMANBOUND_PROJECT_ID" ]; then unset HUMANBOUND_PROJECT_ID; fi
         # --size: hb logs paginates JSON exports too (default 50); a deep scan
         # produces more entries than that, so ask for everything in one page.
         hb logs --format json -o "$INPUT_RESULTS_FILE" --size 100000 || true

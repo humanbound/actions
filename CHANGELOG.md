@@ -6,6 +6,33 @@ Users pin the moving major tag (`v1`) or an exact release (`v1.0.0`).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-30
+
+### Added
+
+- **Platform mode is now available.** `api-key` accepts a Humanbound **user** API
+  key (`hb_…` from `hb api-keys create`), which authenticates headlessly via the
+  `x-api-key` header — no `hb login`, no browser. Results land in your dashboard.
+- `org-id` and `project-id` inputs (mapping to `HUMANBOUND_ORG_ID` and
+  `HUMANBOUND_PROJECT_ID`). Both are required in platform mode: a headless run has
+  no stored selection, and the results export resolves the organisation from
+  `org-id`. `project-id` is validated in the detect step, so a missing value fails
+  before the CLI is installed.
+
+### Changed
+
+- The `version` input now defaults to `2.8.0` — the CLI release that adds headless
+  `HUMANBOUND_API_KEY` auth, and the release this action is tested against.
+  Platform mode requires it; the action checks the installed version and fails with
+  a clear message on older releases.
+- `api-key` is documented as a **user** API key, not a project key — they are
+  different credentials.
+
+### Removed
+
+- The "platform mode is coming soon" gate. Platform mode previously exited with an
+  error regardless of inputs; it now runs.
+
 ## [1.1.0] - 2026-07-20
 
 ### Changed
