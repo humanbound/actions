@@ -6,6 +6,11 @@ Users pin the moving major tag (`v1`) or an exact release (`v1.0.0`).
 
 ## [Unreleased]
 
+### Changed
+- Discord links in `README.md` and the new-issue chooser now use
+  `discord.gg/QFTD6tr9zu` (#9), which opens in `#start-here` and matches
+  www.humanbound.ai. The previous invite still works but lands in `#general`.
+
 ## [1.2.0] - 2026-07-30
 
 ### Added
