@@ -7,5 +7,5 @@ contact_links:
     url: https://github.com/humanbound/humanbound/issues
     about: Bugs in `hb test` itself (not the action wiring) belong in the CLI repo.
   - name: Community Discord
-    url: https://discord.gg/WgTMpmSFtN
+    url: https://discord.gg/QFTD6tr9zu
     about: Questions and discussion.
